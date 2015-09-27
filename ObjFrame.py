@@ -9,18 +9,18 @@ class Alignment(Enum):
     bottom_right = 2
     top_left = 3
     top_right = 4
-    center = 5
+    center = 5  #Center can also mean something like 'unaligned'. This is important.
 
 
 class Angle(Enum):
     _0 = 0
-    _45 = 1
-    _90 = 2
-    _135 = 3
-    _180 = 4
-    _225 = 5
-    _270 = 6
-    _315 = 7
+    _45 = 45
+    _90 = 90
+    _135 = 135
+    _180 = 180
+    _225 = 225
+    _270 = 270
+    _315 = 315
 
 
 class Fill(Enum):
@@ -28,7 +28,8 @@ class Fill(Enum):
     left_half = 2
     right_half = 3
     top_half = 4
-    yes = 5
+    bottom_half = 5
+    yes = 6
 
 
 class Height(Enum):
@@ -52,12 +53,11 @@ class Shape(Enum):
     pentagon = 6
     plus = 7
     rectangle = 8
-    right = 9
-    triangle = 10
-    square = 11
-    star = 12
-    right_triangle = 13
-    unknown = 14
+    triangle = 11
+    square = 12
+    star = 13
+    right_triangle = 14
+    unknown = 15
 
 
 class Size(Enum):
@@ -130,20 +130,40 @@ class ObjFrame:
     def __eq__(self, other):
         if other is None:
             return False
-        return ((self.above == other.above) and
-                (self.left_of == other.left_of) and
-                (self.overlaps == other.overlaps) and
-                (self.inside == other.inside) and
-                (self.shape == other.shape) and
-                (self.alignment == other.alignment) and
-                (self.fill == other.fill) and
-                (self.angle == other.angle) and
-                (self.size == other.size) and
-                (self.height == other.height) and
-                (self.width == other.width))
+        checks = (self.above == other.above,
+                  self.left_of == other.left_of,
+                  self.overlaps == other.overlaps,
+                  self.inside == other.inside,
+                  self.shape == other.shape,
+                  self.alignment == other.alignment,
+                  self.fill == other.fill,
+                  self.size == other.size,
+                  self.height == other.height,
+                  self.width == other.width,)
+        if not all(checks):
+            return False
+
+        # Angle is meaningless for these shapes.
+        if self.shape in (Shape.diamond, Shape.square, Shape.circle, Shape.octagon):
+            return True
+        else:
+            return self.angle == other.angle
 
     def __key(self):
-        return (self.above,
+        # Angle is meaningless for these shapes.
+        if self.shape in (Shape.diamond, Shape.square, Shape.circle, Shape.octagon):
+            return (self.above,
+                self.left_of,
+                self.overlaps,
+                self.inside,
+                self.shape,
+                self.alignment,
+                self.fill,
+                self.size,
+                self.height,
+                self.width,)
+        else:
+            return (self.above,
                 self.left_of,
                 self.overlaps,
                 self.inside,
@@ -190,7 +210,7 @@ class ObjFrame:
             fill_change = None
 
         if self.angle != other.angle:
-            angle_change = Shape_Change(self.angle, other.angle, abs(self.angle.value - other.angle.value))
+            angle_change = Shape_Change(self.angle, other.angle, abs(self.angle.value - other.angle.value) / 45 ) #divide by 45 to normalize it
         else:
             angle_change = None
 
