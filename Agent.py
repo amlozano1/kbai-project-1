@@ -19,6 +19,7 @@ from Verbs import VERBS
 from ObjFrame import *
 from helpers import clean
 
+
 logger = logging.getLogger('Agent')
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler(sys.stdout)
@@ -34,7 +35,7 @@ class Agent:
     # main().
     def __init__(self):
         self.attributes = dict()
-        self.problems_count = 0
+        self.problems_count = 1
     # The primary method for solving incoming Raven's Progressive Matrices.
     # For each problem, your Agent's Solve() method will be called. At the
     # conclusion of Solve(), your Agent should return an integer representing its
@@ -61,7 +62,7 @@ class Agent:
     def Solve(self, problem):
         logger.debug("-" * 79)
         logger.debug("Starting problem {}".format(self.problems_count))
-        self.problems_count += 1
+
         name = problem.name
 
 
@@ -79,19 +80,51 @@ class Agent:
                     self.attributes[attribute].add(value)
 
         # Build frames
+        self.add_all_frames(problem)
+        if problem.problemType == '3x3':
+            logger.warn("3x3 isn't done yet")
+            self.problems_count += 1
+            return -1
+
+        A_B_assignments = self.get_assignments(problem.figures['A'], problem.figures['B'])
+        A_C_assignments = self.get_assignments(problem.figures['A'], problem.figures['C'])
+
+        A_B_deltas = self.get_deltas(A_B_assignments, problem.figures['A'], problem.figures['B'])
+        A_C_deltas = self.get_deltas(A_C_assignments, problem.figures['A'], problem.figures['C'])
+
+        key_range = [str(i) for i in range(1, 7)]
+        B_a_assignments = {key: (self.get_assignments(problem.figures['B'], problem.figures[key])) for key in key_range}
+        C_a_assignments = {key: (self.get_assignments(problem.figures['C'], problem.figures[key])) for key in key_range}
+
+        B_a_deltas = [self.get_deltas(B_a_assignments[key], problem.figures['B'], problem.figures[key]) for key in key_range]
+        C_a_deltas = [self.get_deltas(C_a_assignments[key], problem.figures['C'], problem.figures[key]) for key in key_range]
+
+
+        B_a_idx = B_a_deltas.index(A_C_deltas) + 1
+        C_a_idx = C_a_deltas.index(A_B_deltas) + 1
+
+
+
+        # self.build_sem_net(A, B)
+        logger.debug("Ending problem {}".format(self.problems_count))
+        self.problems_count += 1
+        if B_a_idx == C_a_idx:
+            return B_a_idx
+        else:
+            return -1
+
+    def add_all_frames(self, problem):
         A, B, C = problem.figures['A'], problem.figures['B'], problem.figures['C']
+        a1, a2, a3, a4, a5, a6 = [problem.figures[str(i)] for i in range(1, 7)]
         self.add_frames(A)
         self.add_frames(B)
         self.add_frames(C)
-        a1, a2, a3, a4, a5, a6 = [problem.figures[str(i)] for i in range(1,7)]
-        if problem.problemType == '3x3':
-            logger.warn("3x3 isn't done yet")
-            return -1
-
-        a = self.generate_deltas(problem.figures['A'], problem.figures['B'])
-        # self.build_sem_net(A, B)
-        # print "breakpoint"
-        return -1
+        self.add_frames(a1)
+        self.add_frames(a2)
+        self.add_frames(a3)
+        self.add_frames(a4)
+        self.add_frames(a5)
+        self.add_frames(a6)
 
     def build_sem_net(self, from_figs, to_figs):
         sem_net = {fig.name: [] for fig in from_figs.objects}
@@ -101,43 +134,81 @@ class Agent:
                 if verb.method(figure).attributes in available_fig_attrs:
                     sem_net[figure.name].append((verbname, available_fig_attrs))
 
-    #
-    #
-    def generate_deltas(self, from_fig, to_fig):
-        all_objs = {}
-        all_objs.update(from_fig.objects)
-        all_objs.update(to_fig.objects)
-        all_combinations = product(from_fig.objects.values(), to_fig.objects.values())
+    def get_deltas(self, assignments, from_fig, to_fig):
+        deltas = set()
+        for assigner, assigned in assignments.items():
+            assigner_frame = from_fig.frames[assigner]
+            assigned_frame = to_fig.frames[assigned]
+            verb = self.find_verb(assigner_frame, assigned_frame)
+            if verb is not None:
+                deltas.add((assigner_frame, assigned_frame, verb))
+        return frozenset(deltas)
+
+
+
+    def find_verb(self, first_frame, second_frame):
+        for verb in VERBS:
+            if verb.method(first_frame) == second_frame:
+                return verb
+        else:
+            return None
+
+    def get_assignments(self, from_fig, to_fig):
+        all_combinations = product(from_fig.frames.values(), to_fig.frames.values())
 
         to_keys = to_fig.objects.keys()
         from_keys = from_fig.objects.keys()
         agent_task_cost_matrix = {key: dict.fromkeys(to_keys) for key in from_keys}
+        diffs = {key: dict.fromkeys(to_keys) for key in from_keys}
 
         for first, second in all_combinations:
-            transforms = list(self.find_transforms(first, second))
-            if transforms:
-                agent_task_cost_matrix[first.name][second.name] = min(transforms, key=lambda verb: verb.cost)
+            diffs[first.name][second.name] = first.diff(second)
+            agent_task_cost_matrix[first.name][second.name] = diffs[first.name][second.name].total_changes
+
+        costs = {}
+        for first in from_fig.frames.values():
+            costs[first.name] = sum(agent_task_cost_matrix[first.name].values())
+        assignments = {}
+        assigned_already = []
+        #go through matrix, sorted by total cost, and make assignments. When you run out, the rest get assigned None.
+        for key, values in sorted(agent_task_cost_matrix.items(), key=lambda key_val_tup: costs[key_val_tup[0]]):
+            # min_value = None
+            # min_key = None
+            # while (min_value is None or min_key in assigned_already):
+            #     if len(values) == 0:
+            #         min_key = None
+            #     else:
+            #         min_key = min(values, key=values.get)
+            #         min_value = values.pop(min_key)
+            for assigned in assigned_already:
+                del values[assigned]
+            if values:
+                min_key = min(values, key=values.get)
+            else:
+                min_key = None
+            assignments[key] = min_key
+            if min_key is not None:
+                assigned_already.append(min_key)
 
 
-    def find_transforms(self, first, second):
-        for method_name, verb in VERBS.items():
-            if self.obj_eq(verb.method(second), first):
-                yield verb
+        return assignments
 
-    def obj_eq(self, first, second):
-        return first.attributes == second.attributes
+    # def find_transforms(self, first, second):
+    #     for method_name, verb in VERBS.items():
+    #         if verb.method(second) == first:
+    #             yield verb
 
     def add_frames(self, raven_figure):
         raven_figure.frames = {}
         for name, obj in raven_figure.objects.items():
-            raven_figure.frames[obj.name] = ObjFrame(**obj.clean_attributes)
+            raven_figure.frames[obj.name] = ObjFrame(name=obj.name, **obj.clean_attributes)
+        for frame in raven_figure.frames.values():
+            frame.fill_positions(raven_figure.frames)
 
     def __del__(self):
         self.attributes['above'] = {}
-        self.attributes['below'] = {}
         self.attributes['inside'] = {}
         self.attributes['left_of'] = {}
-        self.attributes['right_of'] = {}
         self.attributes['overlaps'] = {}
         pprint(self.attributes)
         print(self.problems_count)

@@ -2,7 +2,7 @@ __author__ = 'anthony'
 
 from enum import Enum
 from helpers import clean
-
+from collections import namedtuple
 
 class Alignment(Enum):
     bottom_left = 1
@@ -14,18 +14,18 @@ class Alignment(Enum):
 
 class Angle(Enum):
     _0 = 0
-    _135 = 135
-    _180 = 180
-    _225 = 225
-    _270 = 270
-    _315 = 315
-    _45 = 45
-    _90 = 90
+    _45 = 1
+    _90 = 2
+    _135 = 3
+    _180 = 4
+    _225 = 5
+    _270 = 6
+    _315 = 7
 
 
 class Fill(Enum):
-    left_half = 1
-    no = 2
+    no = 1
+    left_half = 2
     right_half = 3
     top_half = 4
     yes = 5
@@ -68,12 +68,14 @@ class Size(Enum):
     very_large = 5
     very_small = 6
 
+Shape_Change = namedtuple('Shape_Change', 'from_ to weight')
+
+FrameDelta = namedtuple('FrameDelta', 'positional_changes shape_changes positional_change_count shape_change_count total_changes')
 
 class ObjFrame:
-    def __init__(self, above=None,
-                 below=None,
+    def __init__(self, name=None,
+                 above=None,
                  left_of=None,
-                 right_of=None,
                  overlaps=None,
                  inside=None,
                  shape=Shape.unknown,
@@ -83,108 +85,181 @@ class ObjFrame:
                  size=Size.small,
                  width=Width.small,
                  height=Height.small):
+
         if above is None:
-            above = set()
-        if below is None:
-            below = set()
+            self.above = frozenset()
+        else:
+            self.above = frozenset(above.split(','))
         if left_of is None:
-            left_of = set()
-        if right_of is None:
-            right_of = set()
+            self.left_of = frozenset()
+        else:
+            self.left_of = frozenset(left_of.split(','))
         if overlaps is None:
-            overlaps = set()
+            self.overlaps = frozenset()
+        else:
+            self.overlaps = frozenset(overlaps.split(','))
         if inside is None:
-            inside = set()
+            self.inside = frozenset()
+        else:
+            self.inside = frozenset(inside.split(','))
+
+        self.name = name
+        self.shape = shape
+        self.alignment = alignment
+        self.fill = fill
+        self.angle = angle
+        self.size = size
+        self.width = width
+        self.height = height
+
         if isinstance(shape, str):
-            shape = getattr(Shape, clean(shape))
+            self.shape = getattr(Shape, clean(shape))
         if isinstance(alignment, str):
-            alignment = getattr(Alignment, clean(alignment))
+            self.alignment = getattr(Alignment, clean(alignment))
         if isinstance(fill, str):
-            fill = getattr(Fill, clean(fill))
+            self.fill = getattr(Fill, clean(fill))
         if isinstance(angle, str):
-            angle = getattr(Angle, '_' + str(angle))
+            self.angle = getattr(Angle, '_' + str(angle))
         if isinstance(size, str):
-            size = getattr(Size, clean(size))
+            self.size = getattr(Size, clean(size))
         if isinstance(width, str):
-            width = getattr(Width, clean(width))
+            self.width = getattr(Width, clean(width))
         if isinstance(height, str):
-            height = getattr(Height, clean(height))
+            self.height = getattr(Height, clean(height))
 
-        def __eq__(self, other):
-            return ((self.above == other.above) and
-                    (self.below == other.below) and
-                    (self.left_of == other.left_of) and
-                    (self.right_of == other.right_of) and
-                    (self.overlaps == other.overlaps) and
-                    (self.inside == other.inside) and
-                    (self.shape == other.shape) and
-                    (self.alignment == other.alignment) and
-                    (self.fill == other.fill) and
-                    (self.angle == other.angle) and
-                    (self.size == other.size) and
-                    (self.height == other.height) and
-                    (self.width == other.width))
+    def __eq__(self, other):
+        if other is None:
+            return False
+        return ((self.above == other.above) and
+                (self.left_of == other.left_of) and
+                (self.overlaps == other.overlaps) and
+                (self.inside == other.inside) and
+                (self.shape == other.shape) and
+                (self.alignment == other.alignment) and
+                (self.fill == other.fill) and
+                (self.angle == other.angle) and
+                (self.size == other.size) and
+                (self.height == other.height) and
+                (self.width == other.width))
 
-        def diff(self, other):
-            """
-            diff
-            :param other: the other frame to compare with.
-            :return: A frame with only the differences between two frames.
-            """
-            removed_above = self.above - other.above
-            removed_below = self.below - other.below
-            removed_left_of = self.left_of - other.left_of
-            removed_right_of = self.right_of - other.right_of
-            removed_overlaps = self.overlaps - other.overlaps
-            removed_inside = self.inside - other.inside
+    def __key(self):
+        return (self.above,
+                self.left_of,
+                self.overlaps,
+                self.inside,
+                self.shape,
+                self.alignment,
+                self.fill,
+                self.angle,
+                self.size,
+                self.height,
+                self.width,)
 
-            added_above = other.above - self.above
-            added_below = other.below - self.below
-            added_left_of = other.left_of - self.left_of
-            added_right_of = other.right_of - self.right_of
-            added_overlaps = other.overlaps - self.overlaps
-            added_inside = other.inside - self.inside
+    def __hash__(self):
+        return hash(self.__key())
 
-            shape_change = self.shape, other.shape if self.shape != other.shape else None
-            alignment_change = self.alignment, other.alignment if self.alignment != other.alignment else None
-            fill_change = self.fill, other.fill if self.fill != other.fill else None
-            angle_change = self.angle, other.angle if self.angle != other.angle else None
-            size_change = self.size, other.size if self.size != other.size else None
-            height_change = self.height, other.height if self.height != other.height else None
-            width_change = self.width, other.width if self.width != other.width else None
+    def diff(self, other):
+        """
+        diff
+        :param other: the other frame to compare with.
+        :return: A frame with only the differences between two frames.
+        """
+        removed_above = self.above - other.above
+        removed_left_of = self.left_of - other.left_of
+        removed_overlaps = self.overlaps - other.overlaps
+        removed_inside = self.inside - other.inside
 
-            positional_changes = [removed_above,
-                                  removed_below,
-                                  removed_left_of,
-                                  removed_right_of,
-                                  removed_overlaps,
-                                  removed_inside,
-                                  added_above,
-                                  added_below,
-                                  added_left_of,
-                                  added_right_of,
-                                  added_overlaps,
-                                  added_inside,]
+        added_above = other.above - self.above
+        added_left_of = other.left_of - self.left_of
+        added_overlaps = other.overlaps - self.overlaps
+        added_inside = other.inside - self.inside
 
-            shape_changes = [shape_change,
-                             alignment_change,
-                             fill_change,
-                             angle_change,
-                             size_change,
-                             height_change,
-                             width_change,]
+        if self.shape != other.shape:
+            shape_change = Shape_Change(self.shape, other.shape, 5)
+        else:
+            shape_change = None
+
+        if self.alignment != other.alignment:
+            alignment_change = Shape_Change(self.alignment, other.alignment, 1)
+        else:
+            alignment_change = None
+
+        if self.fill != other.fill:
+            fill_change = Shape_Change(self.fill, other.fill, abs(self.fill.value - other.fill.value))
+        else:
+            fill_change = None
+
+        if self.angle != other.angle:
+            angle_change = Shape_Change(self.angle, other.angle, abs(self.angle.value - other.angle.value))
+        else:
+            angle_change = None
+
+        if self.size != other.size:
+            size_change = Shape_Change(self.size, other.size, abs(self.size.value - other.size.value))
+        else:
+            size_change = None
+
+        if self.height != other.height:
+            height_change = Shape_Change(self.height, other.height, abs(self.height.value - other.height.value))
+        else:
+            height_change = None
+
+        if self.width != other.width:
+            width_change = Shape_Change(self.width, other.width, abs(self.width.value - other.width.value))
+        else:
+            width_change = None
+
+        positional_changes = [removed_above,
+                              removed_left_of,
+                              removed_overlaps,
+                              removed_inside,
+                              added_above,
+                              added_left_of,
+                              added_overlaps,
+                              added_inside,]
+
+        shape_changes = [shape_change,
+                         alignment_change,
+                         fill_change,
+                         angle_change,
+                         size_change,
+                         height_change,
+                         width_change,]
 
 
-            positional_change_count = 0
-            for set in positional_changes:
-                positional_change_count += len(set)
+        positional_change_count = 0
+        for set in positional_changes:
+            positional_change_count += len(set)
 
-            shape_change_count = 0
-            for change in shape_changes:
-                if change is not None:
-                    shape_change_count += 1
+        shape_change_count = 0
+        for change in shape_changes:
+            if change is not None:
+                shape_change_count += change.weight
 
-            total_changes = positional_change_count + shape_change_count
-            #return positional_changes, shape_changes, positional_change_count, shape_change_count, total_changes
-            return total_changes
+        total_changes = positional_change_count + shape_change_count
+        return FrameDelta(positional_changes, shape_changes, positional_change_count, shape_change_count, total_changes)
+        #return total_changes
 
+    def fill_positions(self, frames):
+        new_above = set()
+        for string in self.above:
+            new_above.add(frames[string])
+        self.above = frozenset(new_above)
+
+        new_left_of = set()
+        for string in self.left_of:
+            new_left_of.add(frames[string])
+        self.left_of = frozenset(new_left_of)
+
+        new_overlaps = set()
+        for string in self.overlaps:
+            new_overlaps.add(frames[string])
+        self.overlaps = frozenset(new_overlaps)
+
+        new_inside = set()
+        for string in self.inside:
+            new_inside.add(frames[string])
+        self.inside = frozenset(new_inside)
+
+    def __repr__(self):
+        return self.name
