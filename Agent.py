@@ -14,7 +14,7 @@ from copy import deepcopy
 from itertools import product
 import logging
 import sys
-
+import multiprocessing
 from Verbs import VERBS
 from ObjFrame import *
 from helpers import clean
@@ -25,6 +25,9 @@ logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
+
+process_pool = multiprocessing.Pool()  # should be the number of CPUs on system. Gotta Go Fast.
+
 
 Delta = namedtuple("Delta", "fro to verbs")
 
@@ -98,12 +101,12 @@ class Agent:
         A_B_deltas = self.get_deltas(A_B_assignments, problem.figures['A'], problem.figures['B'])
         A_C_deltas = self.get_deltas(A_C_assignments, problem.figures['A'], problem.figures['C'])
 
-        key_range = [str(i) for i in range(1, 7)]
-        B_a_assignments = {key: (self.get_assignments(problem.figures['B'], problem.figures[key])) for key in key_range}
-        C_a_assignments = {key: (self.get_assignments(problem.figures['C'], problem.figures[key])) for key in key_range}
-
 
         # These are potentially useful but eat up a TON of CPU time.
+        # key_range = [str(i) for i in range(1, 7)]
+        # B_a_assignments = {key: (self.get_assignments(problem.figures['B'], problem.figures[key])) for key in key_range}
+        # C_a_assignments = {key: (self.get_assignments(problem.figures['C'], problem.figures[key])) for key in key_range}
+
         #B_a_deltas = [self.get_deltas(B_a_assignments[key], problem.figures['B'], problem.figures[key]) for key in key_range]
         #C_a_deltas = [self.get_deltas(C_a_assignments[key], problem.figures['C'], problem.figures[key]) for key in key_range]
 
@@ -222,14 +225,6 @@ class Agent:
         assigned_already = []
         #go through matrix, sorted by total cost, and make assignments. When you run out, the rest get assigned None.
         for key, values in sorted(agent_task_cost_matrix.items(), key=lambda key_val_tup: costs[key_val_tup[0]]):
-            # min_value = None
-            # min_key = None
-            # while (min_value is None or min_key in assigned_already):
-            #     if len(values) == 0:
-            #         min_key = None
-            #     else:
-            #         min_key = min(values, key=values.get)
-            #         min_value = values.pop(min_key)
             for assigned in assigned_already:
                 del values[assigned]
             if values:

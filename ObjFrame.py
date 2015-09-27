@@ -205,7 +205,7 @@ class ObjFrame:
             alignment_change = None
 
         if self.fill != other.fill:
-            fill_change = Shape_Change(self.fill, other.fill, abs(self.fill.value - other.fill.value))
+            fill_change = Shape_Change(self.fill, other.fill, abs(self.fill.value - other.fill.value) / 5) #divide by 5 since fill is an 'easy' operation
         else:
             fill_change = None
 
@@ -256,7 +256,8 @@ class ObjFrame:
             if change is not None:
                 shape_change_count += change.weight
 
-        total_changes = positional_change_count + shape_change_count
+        #total_changes = positional_change_count + shape_change_count
+        total_changes = shape_change_count  # Experiment removing positional changes from assignment.
         return FrameDelta(positional_changes, shape_changes, positional_change_count, shape_change_count, total_changes)
         #return total_changes
 
