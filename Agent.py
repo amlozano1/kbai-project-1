@@ -9,13 +9,12 @@
 # These methods will be necessary for the project's main method to run.
 
 # Install Pillow and uncomment this line to access image processing.
-from pprint import pprint
+from pprint import pformat
 from copy import deepcopy
-from itertools import product
+from itertools import product, combinations
 import logging
 import sys
-import multiprocessing
-from Verbs import VERBS
+from Verbs import VERBS, add, Verb, delete
 from ObjFrame import *
 from helpers import clean
 
@@ -26,12 +25,10 @@ ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
-process_pool = multiprocessing.Pool()  # should be the number of CPUs on system. Gotta Go Fast.
-
 
 Delta = namedtuple("Delta", "fro to verbs")
 
-MAX_VERB_COMBINATIONS = 4  # Exponentially expensive work factor for Agent to search for transformations until it gives up
+MAX_VERB_COMBINATIONS = 3  # Exponentially expensive work factor for Agent to search for transformations until it gives up
 
 class Agent:
     # The default constructor for your Agent. Make sure to execute any
@@ -66,6 +63,7 @@ class Agent:
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
     def Solve(self, problem):
+        # logger.debug(pformat(VERBS))
         logger.debug("-" * 79)
         logger.debug("Starting problem {}".format(self.problems_count))
 
@@ -110,18 +108,14 @@ class Agent:
         #B_a_deltas = [self.get_deltas(B_a_assignments[key], problem.figures['B'], problem.figures[key]) for key in key_range]
         #C_a_deltas = [self.get_deltas(C_a_assignments[key], problem.figures['C'], problem.figures[key]) for key in key_range]
 
-        B_to_a_expected_frames = set()
-        for delta in A_C_deltas:
-            expected = deepcopy(problem.figures['B'].frames[A_B_assignments[delta.fro.name]])
-            for verb in delta.verbs:
-                expected = verb.method(expected)
-            B_to_a_expected_frames.add(expected)
-        C_to_a_expected_frames = set()
-        for delta in A_B_deltas:
-            expected = deepcopy(problem.figures['C'].frames[A_C_assignments[delta.fro.name]])
-            for verb in delta.verbs:
-                expected = verb.method(expected)
-            C_to_a_expected_frames.add(expected)
+        # B_to_a_expected_frames = set()
+        # for delta in A_C_deltas:
+        #     expected = deepcopy(problem.figures['B'].frames[A_B_assignments[delta.fro.name]])
+        #     for verb in delta.verbs:
+        #         expected = verb.method(expected)
+        #     B_to_a_expected_frames.add(expected)
+        B_to_a_expected_frames = self.apply_deltas(A_C_deltas, A_B_assignments, problem.figures['B'].frames)
+        C_to_a_expected_frames = self.apply_deltas(A_B_deltas, A_C_assignments, problem.figures['C'].frames)
 
 
         if set(problem.figures['1'].frames.values()) == B_to_a_expected_frames:
@@ -146,6 +140,23 @@ class Agent:
         self.problems_count += 1
         return answer
 
+    def apply_deltas(self, deltas, assignments, frames):
+        changed = []
+        expected_frames = set()
+        for delta in deltas:
+            if delta.fro.name not in assignments or assignments[delta.fro.name] is None:
+                expected = delta.verbs[0].method(delta.fro) # This frame was deleted or added
+            else:
+                expected = deepcopy(frames[assignments[delta.fro.name]])
+                for verb in delta.verbs:
+                    expected = verb.method(expected)
+            if expected is not None:
+                expected_frames.add(expected) #  When expected is none, it was a delete, so just continue.
+                changed.append(expected.name)
+        unchanged = [frame for key, frame in frames.items() if key not in changed]
+        expected_frames.update(unchanged)
+        return expected_frames
+
     def add_all_frames(self, problem):
         A, B, C = problem.figures['A'], problem.figures['B'], problem.figures['C']
         a1, a2, a3, a4, a5, a6 = [problem.figures[str(i)] for i in range(1, 7)]
@@ -169,25 +180,33 @@ class Agent:
 
     def get_deltas(self, assignments, from_fig, to_fig):
         deltas = set()
+        found_deltas = []
         for assigner, assigned in assignments.items():
-            if assigner is None or assigned is None:
-                continue
-            assigner_frame = from_fig.frames[assigner]
-            assigned_frame = to_fig.frames[assigned]
-            find_verbs = self.find_verbs(assigner_frame, assigned_frame)
-            if find_verbs is not None:
-                deltas.add(Delta(assigner_frame, assigned_frame, find_verbs))
+            if assigned is None:
+                assigner_frame = from_fig.frames[assigner]
+                deltas.add(Delta(assigner_frame, assigned, (Verb(delete, 5),)))
+                found_deltas.append(assigned)
+            else:
+                assigner_frame = from_fig.frames[assigner]
+                assigned_frame = to_fig.frames[assigned]
+                find_verbs = self.find_verbs(assigner_frame, assigned_frame)
+                if find_verbs is not None:
+                    deltas.add(Delta(assigner_frame, assigned_frame, find_verbs))
+                    found_deltas.append(assigned)
+        unfound_deltas = [value for key, value in to_fig.frames.items() if key not in found_deltas]
+        for value in unfound_deltas:
+            deltas.add(Delta(value, value, (Verb(add, 5),)))
         return frozenset(deltas)
 
     def find_verbs(self, first_frame, second_frame):
         """
         :Note This is where we spend all our computation time... Optimize here.
-        Searches through in order list of all verbs that can be
-        applied to figures to try and find some list of verbs that creates the transformation. Verbs are arranged by
-        cost. Verb combinations are roughly arranged by cost, but actually done in lexicographic order, which is hopefully
-        'good enough'. Future improvement ideas: make this a generator with Yield so that the Agent can spend time
-        looking for more potential solutions, and if one of those potential solutions turns out to be correct change
-        the verb cost factors accordingly in order to 'learn' which verbs are preferable to others
+        Searches through in order list of all verbs that can be applied to figures to try and find some list of verbs
+        that creates the transformation. Verbs are arranged by cost. Verb combinations are roughly arranged by cost,
+        but actually done in lexicographic order, which is hopefully 'good enough'. Future improvement ideas: make this
+        a generator with Yield so that the Agent can spend time looking for more potential solutions, and if one of
+        those potential solutions turns out to be correct change the verb cost factors accordingly in order to 'learn'
+        which verbs are preferable to others.
         :param first_frame: the frame we are transforming from
         :param second_frame: the frame we are transforming to
         :return: a list of verbs which when applied in order will change first_frame to second_frame.
@@ -197,7 +216,7 @@ class Agent:
         """
         i = 1
         while i < MAX_VERB_COMBINATIONS:
-            for verbs in product(VERBS, repeat=i):
+            for verbs in combinations(VERBS, i):
                 new = deepcopy(first_frame)
                 for verb in verbs:
                     new = verb.method(new)
@@ -250,5 +269,5 @@ class Agent:
         self.attributes['inside'] = {}
         self.attributes['left_of'] = {}
         self.attributes['overlaps'] = {}
-        pprint(self.attributes)
-        print(self.problems_count)
+        logger.debug(pformat(self.attributes))
+        logger.debug(self.problems_count)

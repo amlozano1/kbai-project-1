@@ -130,10 +130,10 @@ class ObjFrame:
     def __eq__(self, other):
         if other is None:
             return False
-        checks = (self.above == other.above,
-                  self.left_of == other.left_of,
-                  self.overlaps == other.overlaps,
-                  self.inside == other.inside,
+        checks = (len(self.above) == len(other.above),
+                  len(self.left_of) == len(other.left_of),
+                  len(self.overlaps) == len(other.overlaps),
+                  len(self.inside) == len(other.inside),
                   self.shape == other.shape,
                   self.alignment == other.alignment,
                   self.fill == other.fill,
@@ -152,10 +152,10 @@ class ObjFrame:
     def __key(self):
         # Angle is meaningless for these shapes.
         if self.shape in (Shape.diamond, Shape.square, Shape.circle, Shape.octagon):
-            return (self.above,
-                self.left_of,
-                self.overlaps,
-                self.inside,
+            return (len(self.above),
+                len(self.left_of),
+                len(self.overlaps),
+                len(self.inside),
                 self.shape,
                 self.alignment,
                 self.fill,
@@ -163,17 +163,17 @@ class ObjFrame:
                 self.height,
                 self.width,)
         else:
-            return (self.above,
-                self.left_of,
-                self.overlaps,
-                self.inside,
-                self.shape,
-                self.alignment,
-                self.fill,
-                self.angle,
-                self.size,
-                self.height,
-                self.width,)
+            return (len(self.above),
+                    len(self.left_of),
+                    len(self.overlaps),
+                    len(self.inside),
+                    self.shape,
+                    self.alignment,
+                    self.fill,
+                    self.angle,
+                    self.size,
+                    self.height,
+                    self.width)
 
     def __hash__(self):
         return hash(self.__key())

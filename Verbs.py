@@ -2,7 +2,7 @@ __author__ = 'anthony'
 
 from collections import namedtuple
 from copy import deepcopy
-from ObjFrame import Angle, Shape, Alignment, Fill
+from ObjFrame import Angle, Shape, Alignment, Fill, Size
 from helpers import normalize_degrees
 
 Verb = namedtuple('Verb', ['method', 'cost'])
@@ -71,7 +71,18 @@ def fill_shape_factory(fill):
 
 for fill in Fill:
     to_fill = fill_shape_factory(fill)
-    VERBS.append(Verb(to_fill,1))
+    VERBS.append(Verb(to_fill, 2))
+
+def size_change_factory(size):
+    def change_size(frame):
+        frame = deepcopy(frame)
+        frame.size = size
+        return frame
+    return change_size
+
+for size in Size:
+    change_size = size_change_factory(size)
+    VERBS.append(Verb(change_size, 3))
 
 def to_new_shape_factory(shape):
         def to_new_shape(frame):
@@ -93,12 +104,22 @@ def unchanged(frame):
     return deepcopy(frame)
 
 
+def add(frame):
+    """
+    The add method is only separate from unchanged because it costs more.
+    :param frame:
+    :return:
+    """
+    return deepcopy(frame)
+
+def delete(frame):
+    return None
 
 VERBS.extend([Verb(unchanged, 0),
          Verb(mirror_left_right, 1),
          Verb(mirror_up_down, 1),
-         Verb(rotate_90_left, 2),
-         Verb(rotate_90_right, 2),
+         Verb(rotate_90_left, 1.5),
+         Verb(rotate_90_right, 1.5),
         ])
 VERBS.sort(key=lambda x: x[1])
 
