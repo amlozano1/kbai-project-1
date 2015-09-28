@@ -130,8 +130,21 @@ class Agent:
             answer = 5
         elif set(problem.figures['6'].frames.values()) == B_to_a_expected_frames:
             answer = 6
-        else:
-            answer = -1
+        else:  # If the Agent couldn't generate the answer and check with B_to_a, it can try C_to_a...
+            if set(problem.figures['1'].frames.values()) == C_to_a_expected_frames:
+                answer = 1
+            elif set(problem.figures['2'].frames.values()) == C_to_a_expected_frames:
+                answer = 2
+            elif set(problem.figures['3'].frames.values()) == C_to_a_expected_frames:
+                answer = 3
+            elif set(problem.figures['4'].frames.values()) == C_to_a_expected_frames:
+                answer = 4
+            elif set(problem.figures['5'].frames.values()) == C_to_a_expected_frames:
+                answer = 5
+            elif set(problem.figures['6'].frames.values()) == C_to_a_expected_frames:
+                answer = 6
+            else:
+                answer = -1
 
         correct_answer = problem.checkAnswer(answer)
         # self.build_sem_net(A, B)
@@ -141,20 +154,23 @@ class Agent:
         return answer
 
     def apply_deltas(self, deltas, assignments, frames):
-        changed = []
+        # changed = []
         expected_frames = set()
         for delta in deltas:
-            if delta.fro.name not in assignments or assignments[delta.fro.name] is None:
-                expected = delta.verbs[0].method(delta.fro) # This frame was deleted or added
+            if delta.fro.name not in assignments:
+                expected = delta.verbs[0].method(delta.fro) # This frame was added
+            elif assignments[delta.fro.name] is None:
+                expected = None
             else:
                 expected = deepcopy(frames[assignments[delta.fro.name]])
                 for verb in delta.verbs:
                     expected = verb.method(expected)
+                    # changed.append(delta.to.name)
             if expected is not None:
                 expected_frames.add(expected) #  When expected is none, it was a delete, so just continue.
-                changed.append(expected.name)
-        unchanged = [frame for key, frame in frames.items() if key not in changed]
-        expected_frames.update(unchanged)
+        #         changed.append(delta.to.name)
+        # unchanged = [frame for key, frame in frames.items() if key not in changed]
+        # expected_frames.update(unchanged)
         return expected_frames
 
     def add_all_frames(self, problem):
