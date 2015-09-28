@@ -1,8 +1,19 @@
 __author__ = 'anthony'
+"""
+Main logic for shape frames.
 
+Has Enums for Alignment, Angle, Fill, Height, Width, Shape and Size.
+Has class ObjFrame which contains logic for diffing and hashing ObjFrames representing shapes in RPM Figures.
+Also has a couple nametuples Shape_Change and FrameDelta, which store shape changes and full frame differences,
+respectively.
+"""
 from enum import Enum
 from helpers import clean, inner_angle
 from collections import namedtuple
+
+
+# Begin enums. These should all be self explanatory. Order is important, as differences in values are used to determine
+# weight.
 
 class Alignment(Enum):
     bottom_left = 1
@@ -68,11 +79,20 @@ class Size(Enum):
     very_large = 5
     huge = 6
 
+
+# End Enums
+
+# Begin namedtuples - these are just conveniant storage classes for operations and their results.
 Shape_Change = namedtuple('Shape_Change', 'from_ to weight')
 
 FrameDelta = namedtuple('FrameDelta', 'positional_changes shape_changes positional_change_count shape_change_count total_changes')
+# End namedtuples
+
 
 class ObjFrame:
+    """
+    Represents a single shape in a RPM figure.
+    """
     def __init__(self, name=None,
                  above=None,
                  left_of=None,
@@ -128,6 +148,11 @@ class ObjFrame:
             self.height = getattr(Height, clean(height))
 
     def __eq__(self, other):
+        """
+        Compares two frames for equality. It doesn't care about position, only shape attributes.
+        :param other: the other frame to compare against
+        :return: True if both shapes are identical. False otherwise
+        """
         if other is None:
             return False
         checks = (#len(self.above) == len(other.above),
@@ -150,6 +175,10 @@ class ObjFrame:
             return self.angle == other.angle
 
     def __key(self):
+        """
+        Private method to get a unique hashable key for unique frames.
+        :return:
+        """
         # Angle is meaningless for these shapes.
         if self.shape in (Shape.diamond, Shape.square, Shape.circle, Shape.octagon):
             return (#len(self.above),
@@ -182,7 +211,7 @@ class ObjFrame:
         """
         diff
         :param other: the other frame to compare with.
-        :return: A frame with only the differences between two frames.
+        :return: A FrameDelta with the differences between two frames.
         """
         removed_above = self.above - other.above
         removed_left_of = self.left_of - other.left_of

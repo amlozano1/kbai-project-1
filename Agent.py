@@ -18,17 +18,19 @@ from Verbs import VERBS, add, Verb, delete
 from ObjFrame import *
 from helpers import clean
 
-
 logger = logging.getLogger('Agent')
+
+# Dear most esteemed grader, you can turn off the output by changing this to logging.INFO or higher.
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
-
 Delta = namedtuple("Delta", "fro to verbs")
 
-MAX_VERB_COMBINATIONS = 3  # Exponentially expensive work factor for Agent to search for transformations until it gives up
+# Exponentially expensive work factor for Agent to search for transformations until it gives up
+MAX_VERB_COMBINATIONS = 3
+
 
 class Agent:
     # The default constructor for your Agent. Make sure to execute any
@@ -39,6 +41,7 @@ class Agent:
     def __init__(self):
         self.attributes = dict()
         self.problems_count = 1
+
     # The primary method for solving incoming Raven's Progressive Matrices.
     # For each problem, your Agent's Solve() method will be called. At the
     # conclusion of Solve(), your Agent should return an integer representing its
@@ -100,23 +103,16 @@ class Agent:
         A_C_deltas = self.get_deltas(A_C_assignments, problem.figures['A'], problem.figures['C'])
 
 
-        # These are potentially useful but eat up a TON of CPU time.
+        # These are potentially useful but eat up a TON of CPU time. Kept here for posterity.
         # key_range = [str(i) for i in range(1, 7)]
         # B_a_assignments = {key: (self.get_assignments(problem.figures['B'], problem.figures[key])) for key in key_range}
         # C_a_assignments = {key: (self.get_assignments(problem.figures['C'], problem.figures[key])) for key in key_range}
 
-        #B_a_deltas = [self.get_deltas(B_a_assignments[key], problem.figures['B'], problem.figures[key]) for key in key_range]
-        #C_a_deltas = [self.get_deltas(C_a_assignments[key], problem.figures['C'], problem.figures[key]) for key in key_range]
+        # B_a_deltas = [self.get_deltas(B_a_assignments[key], problem.figures['B'], problem.figures[key]) for key in key_range]
+        # C_a_deltas = [self.get_deltas(C_a_assignments[key], problem.figures['C'], problem.figures[key]) for key in key_range]
 
-        # B_to_a_expected_frames = set()
-        # for delta in A_C_deltas:
-        #     expected = deepcopy(problem.figures['B'].frames[A_B_assignments[delta.fro.name]])
-        #     for verb in delta.verbs:
-        #         expected = verb.method(expected)
-        #     B_to_a_expected_frames.add(expected)
         B_to_a_expected_frames = self.apply_deltas(A_C_deltas, A_B_assignments, problem.figures['B'].frames)
         C_to_a_expected_frames = self.apply_deltas(A_B_deltas, A_C_assignments, problem.figures['C'].frames)
-
 
         if set(problem.figures['1'].frames.values()) == B_to_a_expected_frames:
             answer = 1
@@ -147,30 +143,24 @@ class Agent:
                 answer = 5  # No guessing penalty, so just guess 5. TODO, change to -1 when there is a guessing penalty.
 
         correct_answer = problem.checkAnswer(answer)
-        # self.build_sem_net(A, B)
         correct = "Correct" if correct_answer == answer else "Wrong"
         logger.debug("Ending problem {}, Answered {}, {}".format(self.problems_count, answer, correct))
         self.problems_count += 1
         return answer
 
     def apply_deltas(self, deltas, assignments, frames):
-        # changed = []
         expected_frames = set()
         for delta in deltas:
             if delta.fro.name not in assignments:
-                expected = delta.verbs[0].method(delta.fro) # This frame was added
+                expected = delta.verbs[0].method(delta.fro)  # This frame was added
             elif assignments[delta.fro.name] is None:
                 expected = None
             else:
                 expected = deepcopy(frames[assignments[delta.fro.name]])
                 for verb in delta.verbs:
                     expected = verb.method(expected)
-                    # changed.append(delta.to.name)
             if expected is not None:
-                expected_frames.add(expected) #  When expected is none, it was a delete, so just continue.
-        #         changed.append(delta.to.name)
-        # unchanged = [frame for key, frame in frames.items() if key not in changed]
-        # expected_frames.update(unchanged)
+                expected_frames.add(expected)
         return expected_frames
 
     def add_all_frames(self, problem):
@@ -185,14 +175,6 @@ class Agent:
         self.add_frames(a4)
         self.add_frames(a5)
         self.add_frames(a6)
-
-    # def build_sem_net(self, from_figs, to_figs):
-    #     sem_net = {fig.name: [] for fig in from_figs.objects}
-    #     available_fig_attrs = deepcopy(to_figs.attributes)
-    #     for figure in from_figs.objects.values():
-    #         for verbname, verb in VERBS.items():
-    #             if verb.method(figure).attributes in available_fig_attrs:
-    #                 sem_net[figure.name].append((verbname, available_fig_attrs))
 
     def get_deltas(self, assignments, from_fig, to_fig):
         deltas = set()
@@ -239,7 +221,7 @@ class Agent:
                     new = verb.method(new)
                     if new == second_frame:
                         return verbs
-            i+=1
+            i += 1
         return None
 
     def get_assignments(self, from_fig, to_fig):
@@ -259,7 +241,7 @@ class Agent:
             costs[first.name] = sum(agent_task_cost_matrix[first.name].values())
         assignments = {}
         assigned_already = []
-        #go through matrix, sorted by total cost, and make assignments. When you run out, the rest get assigned None.
+        # go through matrix, sorted by total cost, and make assignments. When you run out, the rest get assigned None.
         for key, values in sorted(agent_task_cost_matrix.items(), key=lambda key_val_tup: costs[key_val_tup[0]]):
             for assigned in assigned_already:
                 del values[assigned]
@@ -270,7 +252,6 @@ class Agent:
             assignments[key] = min_key
             if min_key is not None:
                 assigned_already.append(min_key)
-
 
         return assignments
 
