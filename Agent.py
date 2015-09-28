@@ -11,12 +11,13 @@
 # Install Pillow and uncomment this line to access image processing.
 from pprint import pformat
 from copy import deepcopy
-from itertools import product, combinations
+from itertools import combinations
 import logging
 import sys
+
 from Verbs import VERBS, add, Verb, delete
 from ObjFrame import *
-from helpers import clean
+from helpers import clean, get_assignments
 
 logger = logging.getLogger('Agent')
 
@@ -96,12 +97,11 @@ class Agent:
             logger.warn("Visual isn't done yet")
             return -1
 
-        A_B_assignments = self.get_assignments(problem.figures['A'], problem.figures['B'])
-        A_C_assignments = self.get_assignments(problem.figures['A'], problem.figures['C'])
+        A_B_assignments = get_assignments(problem.figures['A'], problem.figures['B'])
+        A_C_assignments = get_assignments(problem.figures['A'], problem.figures['C'])
 
         A_B_deltas = self.get_deltas(A_B_assignments, problem.figures['A'], problem.figures['B'])
         A_C_deltas = self.get_deltas(A_C_assignments, problem.figures['A'], problem.figures['C'])
-
 
         # These are potentially useful but eat up a TON of CPU time. Kept here for posterity.
         # key_range = [str(i) for i in range(1, 7)]
@@ -149,6 +149,13 @@ class Agent:
         return answer
 
     def apply_deltas(self, deltas, assignments, frames):
+        """
+        Applies a list of deltas to a set of a figures frames given assignments.
+        :param deltas: list of deltas to run
+        :param assignments: a mapping that lists which frames must have deltas applied
+        :param frames: the frames to apply the deltas to
+        :return: a new set of frames with the deltas applied.
+        """
         expected_frames = set()
         for delta in deltas:
             if delta.fro.name not in assignments:
@@ -163,7 +170,17 @@ class Agent:
                 expected_frames.add(expected)
         return expected_frames
 
+    def add_frames(self, raven_figure):
+        raven_figure.frames = {}
+        for name, obj in raven_figure.objects.items():
+            raven_figure.frames[obj.name] = ObjFrame(name=obj.name, **obj.clean_attributes)
+        for frame in raven_figure.frames.values():
+            frame.fill_positions(raven_figure.frames)
+
     def add_all_frames(self, problem):
+        """
+        Helper that adds frames for each figure in the problem.
+        """
         A, B, C = problem.figures['A'], problem.figures['B'], problem.figures['C']
         a1, a2, a3, a4, a5, a6 = [problem.figures[str(i)] for i in range(1, 7)]
         self.add_frames(A)
@@ -177,6 +194,9 @@ class Agent:
         self.add_frames(a6)
 
     def get_deltas(self, assignments, from_fig, to_fig):
+        """
+        Given assignments from_fig to_fig, finds deltas between them.
+        """
         deltas = set()
         found_deltas = []
         for assigner, assigned in assignments.items():
@@ -196,7 +216,8 @@ class Agent:
             deltas.add(Delta(value, value, (Verb(add, 5),)))
         return frozenset(deltas)
 
-    def find_verbs(self, first_frame, second_frame):
+    @staticmethod
+    def find_verbs(first_frame, second_frame):
         """
         :Note This is where we spend all our computation time... Optimize here.
         Searches through in order list of all verbs that can be applied to figures to try and find some list of verbs
@@ -223,44 +244,6 @@ class Agent:
                         return verbs
             i += 1
         return None
-
-    def get_assignments(self, from_fig, to_fig):
-        all_combinations = product(from_fig.frames.values(), to_fig.frames.values())
-
-        to_keys = sorted(to_fig.objects.keys())
-        from_keys = sorted(from_fig.objects.keys())
-        agent_task_cost_matrix = {key: dict.fromkeys(to_keys) for key in from_keys}
-        diffs = {key: dict.fromkeys(to_keys) for key in from_keys}
-
-        for first, second in all_combinations:
-            diffs[first.name][second.name] = first.diff(second)
-            agent_task_cost_matrix[first.name][second.name] = diffs[first.name][second.name].total_changes
-
-        costs = {}
-        for first in from_fig.frames.values():
-            costs[first.name] = sum(agent_task_cost_matrix[first.name].values())
-        assignments = {}
-        assigned_already = []
-        # go through matrix, sorted by total cost, and make assignments. When you run out, the rest get assigned None.
-        for key, values in sorted(agent_task_cost_matrix.items(), key=lambda key_val_tup: costs[key_val_tup[0]]):
-            for assigned in assigned_already:
-                del values[assigned]
-            if values:
-                min_key = min(values, key=values.get)
-            else:
-                min_key = None
-            assignments[key] = min_key
-            if min_key is not None:
-                assigned_already.append(min_key)
-
-        return assignments
-
-    def add_frames(self, raven_figure):
-        raven_figure.frames = {}
-        for name, obj in raven_figure.objects.items():
-            raven_figure.frames[obj.name] = ObjFrame(name=obj.name, **obj.clean_attributes)
-        for frame in raven_figure.frames.values():
-            frame.fill_positions(raven_figure.frames)
 
     def __del__(self):
         self.attributes['above'] = {}
