@@ -144,7 +144,7 @@ class Agent:
             elif set(problem.figures['6'].frames.values()) == C_to_a_expected_frames:
                 answer = 6
             else:
-                answer = -1
+                answer = 5  # No guessing penalty, so just guess 5. TODO, change to -1 when there is a guessing penalty.
 
         correct_answer = problem.checkAnswer(answer)
         # self.build_sem_net(A, B)
@@ -232,7 +232,8 @@ class Agent:
         """
         i = 1
         while i < MAX_VERB_COMBINATIONS:
-            for verbs in combinations(VERBS, i):
+            verb_combinations = list(combinations(VERBS, i))
+            for verbs in verb_combinations:
                 new = deepcopy(first_frame)
                 for verb in verbs:
                     new = verb.method(new)
@@ -244,8 +245,8 @@ class Agent:
     def get_assignments(self, from_fig, to_fig):
         all_combinations = product(from_fig.frames.values(), to_fig.frames.values())
 
-        to_keys = to_fig.objects.keys()
-        from_keys = from_fig.objects.keys()
+        to_keys = sorted(to_fig.objects.keys())
+        from_keys = sorted(from_fig.objects.keys())
         agent_task_cost_matrix = {key: dict.fromkeys(to_keys) for key in from_keys}
         diffs = {key: dict.fromkeys(to_keys) for key in from_keys}
 

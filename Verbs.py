@@ -117,9 +117,9 @@ def delete(frame):
 
 VERBS.extend([Verb(unchanged, 0),
          Verb(mirror_left_right, 1),
-         Verb(mirror_up_down, 1),
+         Verb(mirror_up_down, 1.1),
          Verb(rotate_90_left, 1.5),
-         Verb(rotate_90_right, 1.5),
+         Verb(rotate_90_right, 1.6),
         ])
 VERBS.sort(key=lambda x: x[1])
 

@@ -11,6 +11,9 @@ def normalize_degrees(deg):
         deg += 360
     return deg
 
+def inner_angle(first, second):
+    return 180 - abs(abs(first - second) - 180)
+
 def verb_chain_search(verbs, first_frame, second_frame):
         new = deepcopy(first_frame)
         for verb in verbs:

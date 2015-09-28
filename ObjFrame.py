@@ -1,7 +1,7 @@
 __author__ = 'anthony'
 
 from enum import Enum
-from helpers import clean
+from helpers import clean, inner_angle
 from collections import namedtuple
 
 class Alignment(Enum):
@@ -61,12 +61,12 @@ class Shape(Enum):
 
 
 class Size(Enum):
-    huge = 1
-    large = 2
-    small = 3
-    medium = 4
+    very_small = 1
+    small = 2
+    medium = 3
+    large = 4
     very_large = 5
-    very_small = 6
+    huge = 6
 
 Shape_Change = namedtuple('Shape_Change', 'from_ to weight')
 
@@ -130,10 +130,10 @@ class ObjFrame:
     def __eq__(self, other):
         if other is None:
             return False
-        checks = (len(self.above) == len(other.above),
-                  len(self.left_of) == len(other.left_of),
-                  len(self.overlaps) == len(other.overlaps),
-                  len(self.inside) == len(other.inside),
+        checks = (#len(self.above) == len(other.above),
+                  #len(self.left_of) == len(other.left_of),
+                  #len(self.overlaps) == len(other.overlaps),
+                  #len(self.inside) == len(other.inside),
                   self.shape == other.shape,
                   self.alignment == other.alignment,
                   self.fill == other.fill,
@@ -152,16 +152,16 @@ class ObjFrame:
     def __key(self):
         # Angle is meaningless for these shapes.
         if self.shape in (Shape.diamond, Shape.square, Shape.circle, Shape.octagon):
-            return (len(self.above),
-                len(self.left_of),
-                len(self.overlaps),
-                len(self.inside),
-                self.shape,
-                self.alignment,
-                self.fill,
-                self.size,
-                self.height,
-                self.width,)
+            return (#len(self.above),
+                    #len(self.left_of),
+                    #len(self.overlaps),
+                    #len(self.inside),
+                    self.shape,
+                    self.alignment,
+                    self.fill,
+                    self.size,
+                    self.height,
+                    self.width,)
         else:
             return (len(self.above),
                     len(self.left_of),
@@ -210,7 +210,7 @@ class ObjFrame:
             fill_change = None
 
         if self.angle != other.angle:
-            angle_change = Shape_Change(self.angle, other.angle, abs(self.angle.value - other.angle.value) / 45 ) #divide by 45 to normalize it
+            angle_change = Shape_Change(self.angle, other.angle, inner_angle(self.angle.value, other.angle.value) / 45 ) #divide by 45 to normalize it
         else:
             angle_change = None
 
