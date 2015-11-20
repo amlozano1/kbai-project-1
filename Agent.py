@@ -9,18 +9,19 @@
 # These methods will be necessary for the project's main method to run.
 
 # Install Pillow and uncomment this line to access image processing.
+from PIL import Image
+from PIL.ImageChops import difference
 from pprint import pformat
 from copy import deepcopy
 from itertools import combinations
 import logging
 import sys
 
-from Verbs import VERBS, add, Verb, delete
+from Verbs import VERBS, binary_verbs
 from ObjFrame import *
-from helpers import clean, get_assignments
+from helpers import clean, get_assignments, rmsdiff_2011
 
 logger = logging.getLogger('Agent')
-
 # Dear most esteemed grader, you can turn off the output by changing this to logging.INFO or higher.
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler(sys.stdout)
@@ -42,6 +43,8 @@ class Agent:
     def __init__(self):
         self.attributes = dict()
         self.problems_count = 1
+        self.show_images = False
+
 
     # The primary method for solving incoming Raven's Progressive Matrices.
     # For each problem, your Agent's Solve() method will be called. At the
@@ -67,157 +70,63 @@ class Agent:
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
     def Solve(self, problem):
+        solution = '-1'
         # logger.debug(pformat(VERBS))
         logger.debug("-" * 79)
-        logger.debug("Starting problem {}".format(self.problems_count))
+        logger.debug("Starting problem {}".format(problem.name))
 
         name = problem.name
 
-
-
-        # Keep track of all unique attributes seen in Agent Memory
-        for figure in problem.figures.values():
-            for raven_object in figure.objects.values():
-                raven_object.clean_attributes = {}
-                for attribute, value in raven_object.attributes.items():
-                    # Dashes/spaces mess with Python kwarg unpacking. Clean them up
-                    attribute = clean(attribute)
-                    value = clean(value)
-                    raven_object.clean_attributes[attribute] = value
-                    self.attributes.setdefault(attribute, set())
-                    self.attributes[attribute].add(value)
-
-        # Build frames
-        self.add_all_frames(problem)
+        a = problem.figures['A']
+        b = problem.figures['B']
+        c = problem.figures['C']
         if problem.problemType == '3x3':
-            logger.warn("3x3 isn't done yet")
-            self.problems_count += 1
-            return -1
-        if not problem.hasVerbal:
-            logger.warn("Visual isn't done yet")
-            return -1
+            d = problem.figures['D']
+            e = problem.figures['E']
+            f = problem.figures['F']
+            g = problem.figures['G']
+            h = problem.figures['H']
 
-        A_B_assignments = get_assignments(problem.figures['A'], problem.figures['B'])
-        A_C_assignments = get_assignments(problem.figures['A'], problem.figures['C'])
+        problem.answers = [problem.figures['1'],
+                           problem.figures['2'],
+                           problem.figures['3'],
+                           problem.figures['4'],
+                           problem.figures['5'],
+                           problem.figures['6'],
+                           problem.figures['7'],
+                           problem.figures['8'],]
 
-        A_B_deltas = self.get_deltas(A_B_assignments, problem.figures['A'], problem.figures['B'])
-        A_C_deltas = self.get_deltas(A_C_assignments, problem.figures['A'], problem.figures['C'])
+        self.load_images_bw(problem)
 
-        # These are potentially useful but eat up a TON of CPU time. Kept here for posterity.
-        # key_range = [str(i) for i in range(1, 7)]
-        # B_a_assignments = {key: (self.get_assignments(problem.figures['B'], problem.figures[key])) for key in key_range}
-        # C_a_assignments = {key: (self.get_assignments(problem.figures['C'], problem.figures[key])) for key in key_range}
+        transition_A_B_C = self.find_binary_verbs(a.image, b.image, c.image)
+        transition_D_E_F = self.find_binary_verbs(a.image, b.image, c.image)
+        if (transition_A_B_C is not None and
+            transition_D_E_F is not None and
+            transition_A_B_C == transition_D_E_F):
+            expected = transition_A_B_C.method(g.image, h.image)
+            for answer in problem.answers:
+                #answer.image.show("answer")
+                #expected.show("expected")
+                answer.rms = rmsdiff_2011(expected, answer.image)
+            solution = min(problem.answers, key=lambda answer: answer.rms).name
+            logger.debug('Found answer from ABC and DEF transitions ({}), {}'.format(transition_A_B_C, solution))
+        if problem.checkAnswer(solution) == int(solution):
+            logger.debug("Correct!")
+        else:
+            logger.debug("Incorrect...")
+        return solution
 
-        # B_a_deltas = [self.get_deltas(B_a_assignments[key], problem.figures['B'], problem.figures[key]) for key in key_range]
-        # C_a_deltas = [self.get_deltas(C_a_assignments[key], problem.figures['C'], problem.figures[key]) for key in key_range]
-
-        B_to_a_expected_frames = self.apply_deltas(A_C_deltas, A_B_assignments, problem.figures['B'].frames)
-        C_to_a_expected_frames = self.apply_deltas(A_B_deltas, A_C_assignments, problem.figures['C'].frames)
-
-        if set(problem.figures['1'].frames.values()) == B_to_a_expected_frames:
-            answer = 1
-        elif set(problem.figures['2'].frames.values()) == B_to_a_expected_frames:
-            answer = 2
-        elif set(problem.figures['3'].frames.values()) == B_to_a_expected_frames:
-            answer = 3
-        elif set(problem.figures['4'].frames.values()) == B_to_a_expected_frames:
-            answer = 4
-        elif set(problem.figures['5'].frames.values()) == B_to_a_expected_frames:
-            answer = 5
-        elif set(problem.figures['6'].frames.values()) == B_to_a_expected_frames:
-            answer = 6
-        else:  # If the Agent couldn't generate the answer and check with B_to_a, it can try C_to_a...
-            if set(problem.figures['1'].frames.values()) == C_to_a_expected_frames:
-                answer = 1
-            elif set(problem.figures['2'].frames.values()) == C_to_a_expected_frames:
-                answer = 2
-            elif set(problem.figures['3'].frames.values()) == C_to_a_expected_frames:
-                answer = 3
-            elif set(problem.figures['4'].frames.values()) == C_to_a_expected_frames:
-                answer = 4
-            elif set(problem.figures['5'].frames.values()) == C_to_a_expected_frames:
-                answer = 5
-            elif set(problem.figures['6'].frames.values()) == C_to_a_expected_frames:
-                answer = 6
-            else:
-                answer = 5  # No guessing penalty, so just guess 5. TODO, change to -1 when there is a guessing penalty.
-
-        correct_answer = problem.checkAnswer(answer)
-        correct = "Correct" if correct_answer == answer else "Wrong"
-        logger.debug("Ending problem {}, Answered {}, {}".format(self.problems_count, answer, correct))
-        self.problems_count += 1
-        return answer
-
-    def apply_deltas(self, deltas, assignments, frames):
+    def load_images_bw(self, problem):
         """
-        Applies a list of deltas to a set of a figures frames given assignments.
-        :param deltas: list of deltas to run
-        :param assignments: a mapping that lists which frames must have deltas applied
-        :param frames: the frames to apply the deltas to
-        :return: a new set of frames with the deltas applied.
+        loads each image from disk in black and white mode with 2 colors. Stashes the result in figure.image
         """
-        expected_frames = set()
-        for delta in deltas:
-            if delta.fro.name not in assignments:
-                expected = delta.verbs[0].method(delta.fro)  # This frame was added
-            elif assignments[delta.fro.name] is None:
-                expected = None
-            else:
-                expected = deepcopy(frames[assignments[delta.fro.name]])
-                for verb in delta.verbs:
-                    expected = verb.method(expected)
-            if expected is not None:
-                expected_frames.add(expected)
-        return expected_frames
+        for name, figure in problem.figures.items():
+            figure.image = Image.open(figure.visualFilename)
+            figure.image = figure.image.convert('1')
 
-    def add_frames(self, raven_figure):
-        raven_figure.frames = {}
-        for name, obj in raven_figure.objects.items():
-            raven_figure.frames[obj.name] = ObjFrame(name=obj.name, **obj.clean_attributes)
-        for frame in raven_figure.frames.values():
-            frame.fill_positions(raven_figure.frames)
-
-    def add_all_frames(self, problem):
-        """
-        Helper that adds frames for each figure in the problem.
-        """
-        A, B, C = problem.figures['A'], problem.figures['B'], problem.figures['C']
-        a1, a2, a3, a4, a5, a6 = [problem.figures[str(i)] for i in range(1, 7)]
-        self.add_frames(A)
-        self.add_frames(B)
-        self.add_frames(C)
-        self.add_frames(a1)
-        self.add_frames(a2)
-        self.add_frames(a3)
-        self.add_frames(a4)
-        self.add_frames(a5)
-        self.add_frames(a6)
-
-    def get_deltas(self, assignments, from_fig, to_fig):
-        """
-        Given assignments from_fig to_fig, finds deltas between them.
-        """
-        deltas = set()
-        found_deltas = []
-        for assigner, assigned in assignments.items():
-            if assigned is None:
-                assigner_frame = from_fig.frames[assigner]
-                deltas.add(Delta(assigner_frame, assigned, (Verb(delete, 5),)))
-                found_deltas.append(assigned)
-            else:
-                assigner_frame = from_fig.frames[assigner]
-                assigned_frame = to_fig.frames[assigned]
-                find_verbs = self.find_verbs(assigner_frame, assigned_frame)
-                if find_verbs is not None:
-                    deltas.add(Delta(assigner_frame, assigned_frame, find_verbs))
-                    found_deltas.append(assigned)
-        unfound_deltas = [value for key, value in to_fig.frames.items() if key not in found_deltas]
-        for value in unfound_deltas:
-            deltas.add(Delta(value, value, (Verb(add, 5),)))
-        return frozenset(deltas)
 
     @staticmethod
-    def find_verbs(first_frame, second_frame):
+    def find_verbs(first, second):
         """
         :Note This is where we spend all our computation time... Optimize here.
         Searches through in order list of all verbs that can be applied to figures to try and find some list of verbs
@@ -226,9 +135,9 @@ class Agent:
         a generator with Yield so that the Agent can spend time looking for more potential solutions, and if one of
         those potential solutions turns out to be correct change the verb cost factors accordingly in order to 'learn'
         which verbs are preferable to others.
-        :param first_frame: the frame we are transforming from
-        :param second_frame: the frame we are transforming to
-        :return: a list of verbs which when applied in order will change first_frame to second_frame.
+        :param first: the image we are transforming from
+        :param second: the image we are transforming to
+        :return: a list of verbs which when applied in order will change first to second.
 
         :var MAX_VERB_COMBINATIONS This is the max depth the Agent will search for until giving up. 3 would mean 3 verbs
         in sequence.
@@ -236,19 +145,40 @@ class Agent:
         i = 1
         while i < MAX_VERB_COMBINATIONS:
             verb_combinations = list(combinations(VERBS, i))
+            new = first.copy()
             for verbs in verb_combinations:
-                new = deepcopy(first_frame)
                 for verb in verbs:
-                    new = verb.method(new)
-                    if new == second_frame:
-                        return verbs
+                    new = verb.method(new, second)
+                rms = rmsdiff_2011(new, second)
+                if rms < .1:
+                    return verbs
             i += 1
         return None
 
-    def __del__(self):
-        self.attributes['above'] = {}
-        self.attributes['inside'] = {}
-        self.attributes['left_of'] = {}
-        self.attributes['overlaps'] = {}
-        logger.debug(pformat(self.attributes))
-        logger.debug(self.problems_count)
+    @staticmethod
+    def find_binary_verbs(first, second, expected):
+        """
+        :Note This is where we spend all our computation time... Optimize here.
+        Searches through in order list of all verbs that can be applied to figures to try and find some list of verbs
+        that creates the transformation. Verbs are arranged by cost. Verb combinations are roughly arranged by cost,
+        but actually done in lexicographic order, which is hopefully 'good enough'. Future improvement ideas: make this
+        a generator with Yield so that the Agent can spend time looking for more potential solutions, and if one of
+        those potential solutions turns out to be correct change the verb cost factors accordingly in order to 'learn'
+        which verbs are preferable to others.
+        :param first: the image we are transforming from
+        :param second: the image we are transforming to
+        :return: a list of verbs which when applied in order will change first to second.
+
+        :var MAX_VERB_COMBINATIONS This is the max depth the Agent will search for until giving up. 3 would mean 3 verbs
+        in sequence.
+        """
+        i = 1
+        for verb in binary_verbs:
+            result = verb.method(first, second)
+            # result.show("result")
+            # expected.show("expected")
+            rms = rmsdiff_2011(result, expected)
+            if rms < 32:
+                return verb
+        i += 1
+        return None

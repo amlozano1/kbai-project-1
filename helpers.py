@@ -1,5 +1,11 @@
 __author__ = 'anthony'
 from itertools import product
+import math
+from PIL import ImageChops, ImageFilter
+
+def threshold_255(x):
+    return 0 if x < 128 else 255
+
 
 def clean(bad_string):
     """
@@ -70,3 +76,20 @@ def get_assignments(from_fig, to_fig):
             assigned_already.append(min_key)
 
     return assignments
+
+def rmsdiff_2011(im1, im2):
+    """
+    Calculate the root-mean-square difference between two images. A value close to zero means a good match.
+    From: https://code.activestate.com/recipes/577630-comparing-two-images/ with modifications.
+    :param im1:
+    :param im2:
+    :return:
+    """
+    median_filter = ImageFilter.MedianFilter(size=5)
+    diff = ImageChops.difference(im1, im2).filter(median_filter)
+    #diff.show()
+    h = diff.histogram()
+    sq = (value*(idx**2) for idx, value in enumerate(h))
+    sum_of_squares = sum(sq)
+    rms = math.sqrt(sum_of_squares/float(im1.size[0] * im1.size[1]))
+    return rms
