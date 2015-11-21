@@ -1,8 +1,7 @@
 __author__ = 'anthony'
 from itertools import product
 import math
-from PIL import ImageChops, ImageFilter
-
+from PIL import ImageChops, ImageFilter, Image
 def threshold_255(x):
     return 0 if x < 128 else 255
 
@@ -93,3 +92,79 @@ def rmsdiff_2011(im1, im2):
     sum_of_squares = sum(sq)
     rms = math.sqrt(sum_of_squares/float(im1.size[0] * im1.size[1]))
     return rms
+
+def find_blobs(im):
+    lable_table = {}
+    rows, cols = im.size
+    label_buffer = []
+    data = list(im.getdata())
+    no_label = 0 # 0 is reserved for "No label"
+    left_lbl = no_label
+    label_idx = 1
+    for idx, pixel in enumerate(data):
+        x, y = idx // im.size[0], idx % im.size[1]
+        left_lbl = label_buffer[-1] if idx % cols != 0 else 0
+        if pixel == 255:
+            label_buffer.append(0)
+        else:
+            if idx < cols:
+                if left_lbl == 0:
+                    label_buffer.append(label_idx)
+                    lable_table[label_idx] = {label_idx}
+                    label_idx += 1
+                else:
+                    label_buffer.append(left_lbl)
+            else:
+                neighbor_lbls = label_buffer[idx - rows - 1:idx - rows + 2]
+                neighbor_lbls.append(left_lbl)
+                neighbor_lbls = [y for y in neighbor_lbls if y != 0] # remove all zeros
+                # We care about the labels marked X in the picture below, Any will do so we grab the max:
+                #  XXX
+                #  X*.
+                #  ...
+
+                new_label = min(neighbor_lbls) if neighbor_lbls else 0
+                if new_label == 0:
+                    label_buffer.append(label_idx)
+                    lable_table[label_idx] = {label_idx}
+                    label_idx += 1
+                else:
+                    label_buffer.append(new_label)
+                    other_lbls = {y for y in neighbor_lbls if y != label_buffer[-1]}
+                    if other_lbls:
+                        lable_table[new_label] |= other_lbls
+                        for label in list(other_lbls):
+                            lable_table[new_label] |= lable_table[label]
+    skip = set()
+    blobs = []
+    for label, same_as in lable_table.items():
+        if label in skip:
+            continue
+        else:
+            blobs.append(list(same_as))
+            skip |= same_as
+    blob_ims = []
+    for blob in blobs:
+        image_data = []
+        for label in label_buffer:
+            if label in blob:
+                image_data.append(0)
+            else:
+                image_data.append(255)
+        image = Image.new(im.mode, im.size)
+        image.putdata(image_data)
+        image.show()
+        blob_ims.append(image)
+    # for idx, label in enumerate(lable_table):
+    #     for item in label_buffer:
+    #         if item == label:
+    #             label_buffer[idx] = label
+    # blob_count = len(set(lable_table))
+    # blob_lbls_list = {}
+    # for idx in range(blob_count):
+    #     blob_lbls_list[idx] = [label_idx for label_idx, label in enumerate(lable_table) if label == idx]
+    # blobs = []
+    # for blob_lbls in blob_lbls_list:
+    #     blobs.append([255 if label in blob_lbls else 0 for label in label_buffer])
+    print("here")
+    return blob_ims

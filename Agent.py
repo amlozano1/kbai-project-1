@@ -19,7 +19,7 @@ import sys
 
 from Verbs import VERBS, binary_verbs
 from ObjFrame import *
-from helpers import clean, get_assignments, rmsdiff_2011
+from helpers import clean, get_assignments, rmsdiff_2011, find_blobs
 
 logger = logging.getLogger('Agent')
 # Dear most esteemed grader, you can turn off the output by changing this to logging.INFO or higher.
@@ -98,18 +98,23 @@ class Agent:
 
         self.load_images_bw(problem)
 
-        transition_A_B_C = self.find_binary_verbs(a.image, b.image, c.image)
-        transition_D_E_F = self.find_binary_verbs(a.image, b.image, c.image)
-        if (transition_A_B_C is not None and
-            transition_D_E_F is not None and
-            transition_A_B_C == transition_D_E_F):
-            expected = transition_A_B_C.method(g.image, h.image)
-            for answer in problem.answers:
-                #answer.image.show("answer")
-                #expected.show("expected")
-                answer.rms = rmsdiff_2011(expected, answer.image)
-            solution = min(problem.answers, key=lambda answer: answer.rms).name
-            logger.debug('Found answer from ABC and DEF transitions ({}), {}'.format(transition_A_B_C, solution))
+        # transition_A_B_C = self.find_binary_verbs(a.image, b.image, c.image)
+        # transition_D_E_F = self.find_binary_verbs(a.image, b.image, c.image)
+        # if (transition_A_B_C is not None and
+        #     transition_D_E_F is not None and
+        #     transition_A_B_C == transition_D_E_F):
+        #     expected = transition_A_B_C.method(g.image, h.image)
+        #     for answer in problem.answers:
+        #         #answer.image.show("answer")
+        #         #expected.show("expected")
+        #         answer.rms = rmsdiff_2011(expected, answer.image)
+        #     solution = min(problem.answers, key=lambda answer: answer.rms).name
+        #     logger.debug('Found answer from ABC and DEF transitions ({}), {}'.format(transition_A_B_C, solution))
+        # else:
+        #
+        #     pass
+        for name, figure in sorted(problem.figures.items()):
+            figure.blobs = find_blobs(figure.image)
         if problem.checkAnswer(solution) == int(solution):
             logger.debug("Correct!")
         else:
