@@ -153,18 +153,6 @@ def find_blobs(im):
                 image_data.append(255)
         image = Image.new(im.mode, im.size)
         image.putdata(image_data)
-        image.show()
+        # image.show()
         blob_ims.append(image)
-    # for idx, label in enumerate(lable_table):
-    #     for item in label_buffer:
-    #         if item == label:
-    #             label_buffer[idx] = label
-    # blob_count = len(set(lable_table))
-    # blob_lbls_list = {}
-    # for idx in range(blob_count):
-    #     blob_lbls_list[idx] = [label_idx for label_idx, label in enumerate(lable_table) if label == idx]
-    # blobs = []
-    # for blob_lbls in blob_lbls_list:
-    #     blobs.append([255 if label in blob_lbls else 0 for label in label_buffer])
-    print("here")
     return blob_ims
