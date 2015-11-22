@@ -70,7 +70,8 @@ class Agent:
         logger.debug("Starting problem {}".format(problem.name))
 
         name = problem.name
-
+        if name.find("Problem B") != -1:
+            return -1
         a = problem.figures['A']
         b = problem.figures['B']
         c = problem.figures['C']
