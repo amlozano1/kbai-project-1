@@ -4,9 +4,6 @@ Master list of atomic transitions that can be applied to shapes in RPM figures.
 """
 from collections import namedtuple
 from PIL.ImageChops import *
-from copy import deepcopy
-from ObjFrame import Angle, Shape, Alignment, Fill, Size
-from helpers import normalize_degrees
 
 Verb = namedtuple('Verb', ['method', 'cost'])
 

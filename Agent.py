@@ -9,17 +9,15 @@
 # These methods will be necessary for the project's main method to run.
 
 # Install Pillow and uncomment this line to access image processing.
-from PIL import Image
-from PIL.ImageChops import difference
-from pprint import pformat
 from copy import deepcopy
-from itertools import combinations
+from collections import defaultdict
 import logging
 import sys
 
-from Verbs import VERBS, binary_verbs
-from ObjFrame import *
-from helpers import clean, get_assignments, rmsdiff_2011, find_blobs
+from PIL import Image
+
+from Verbs import binary_verbs
+from helpers import rmsdiff_2011, find_blobs
 
 logger = logging.getLogger('Agent')
 # Dear most esteemed grader, you can turn off the output by changing this to logging.INFO or higher.
@@ -27,11 +25,6 @@ logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
-
-Delta = namedtuple("Delta", "fro to verbs")
-
-# Exponentially expensive work factor for Agent to search for transformations until it gives up
-MAX_VERB_COMBINATIONS = 3
 
 
 class Agent:
@@ -43,6 +36,7 @@ class Agent:
     def __init__(self):
         self.attributes = dict()
         self.problems_count = 1
+        self.blob_lib = []
         self.show_images = False
 
 
@@ -87,6 +81,7 @@ class Agent:
             g = problem.figures['G']
             h = problem.figures['H']
 
+        problem.matrix = [a, b, c, d, e, f, g, h]
         problem.answers = [problem.figures['1'],
                            problem.figures['2'],
                            problem.figures['3'],
@@ -96,25 +91,57 @@ class Agent:
                            problem.figures['7'],
                            problem.figures['8'],]
 
-        self.load_images_bw(problem)
+        solution_votes = defaultdict(int)
 
-        # transition_A_B_C = self.find_binary_verbs(a.image, b.image, c.image)
-        # transition_D_E_F = self.find_binary_verbs(a.image, b.image, c.image)
-        # if (transition_A_B_C is not None and
-        #     transition_D_E_F is not None and
-        #     transition_A_B_C == transition_D_E_F):
-        #     expected = transition_A_B_C.method(g.image, h.image)
-        #     for answer in problem.answers:
-        #         #answer.image.show("answer")
-        #         #expected.show("expected")
-        #         answer.rms = rmsdiff_2011(expected, answer.image)
-        #     solution = min(problem.answers, key=lambda answer: answer.rms).name
-        #     logger.debug('Found answer from ABC and DEF transitions ({}), {}'.format(transition_A_B_C, solution))
-        # else:
-        #
-        #     pass
-        for name, figure in sorted(problem.figures.items()):
-            figure.blobs = find_blobs(figure.image)
+        self.load_images_bw(problem)
+        if name.find("Problem E") != -1:
+            transition_A_B_C = self.find_binary_verbs(a.image, b.image, c.image)
+            transition_D_E_F = self.find_binary_verbs(a.image, b.image, c.image)
+            if (transition_A_B_C is not None and
+                transition_D_E_F is not None and
+                transition_A_B_C == transition_D_E_F):
+                expected = transition_A_B_C.method(g.image, h.image)
+                for answer in problem.answers:
+                    #answer.image.show("answer")
+                    #expected.show("expected")
+                    answer.rms = rmsdiff_2011(expected, answer.image)
+                solution = min(problem.answers, key=lambda answer: answer.rms).name
+                logger.debug('Found answer from ABC and DEF transitions ({}), {}'.format(transition_A_B_C, solution))
+            else:
+
+                pass
+        else:
+            for fig_name, figure in sorted(problem.figures.items()):
+                blobs = find_blobs(figure.image)
+                figure.blobs = self.get_blob_ids(blobs)
+
+            blob_counts = defaultdict(int)
+            for figure in problem.matrix:
+                for blob in figure.blobs:
+                    blob_counts[blob] += 1
+            for answer in problem.answers:
+                new_counts = deepcopy(blob_counts)
+                for blob in answer.blobs:
+                    new_counts[blob] += 1
+                counts = list(new_counts.values())
+                some_count = counts[0]
+                if all([count == some_count for count in counts]):
+                    solution_votes[answer.name] += 1
+                    logger.debug('Found answer from counting blobs, {}'.format(answer.name))
+                if all([count % 3 == 0 for count in counts]):
+                    solution_votes[answer.name] += 1
+                    logger.debug('Found answer from balancing matrix, {}'.format(answer.name))
+                if all([1 == count for count in counts]):
+                    solution_votes[answer.name] += 1
+                    logger.debug('Found answer from uniquifying matrix, {}'.format(answer.name))
+            if solution_votes:
+                solution = max(solution_votes.keys(), key=lambda x: solution_votes[x])
+                logger.debug("Giving answer {}.".format(solution))
+            else:
+                logger.debug("Skipped")
+                solution = -1
+
+
         if problem.checkAnswer(solution) == int(solution):
             logger.debug("Correct!")
         else:
@@ -131,52 +158,7 @@ class Agent:
 
 
     @staticmethod
-    def find_verbs(first, second):
-        """
-        :Note This is where we spend all our computation time... Optimize here.
-        Searches through in order list of all verbs that can be applied to figures to try and find some list of verbs
-        that creates the transformation. Verbs are arranged by cost. Verb combinations are roughly arranged by cost,
-        but actually done in lexicographic order, which is hopefully 'good enough'. Future improvement ideas: make this
-        a generator with Yield so that the Agent can spend time looking for more potential solutions, and if one of
-        those potential solutions turns out to be correct change the verb cost factors accordingly in order to 'learn'
-        which verbs are preferable to others.
-        :param first: the image we are transforming from
-        :param second: the image we are transforming to
-        :return: a list of verbs which when applied in order will change first to second.
-
-        :var MAX_VERB_COMBINATIONS This is the max depth the Agent will search for until giving up. 3 would mean 3 verbs
-        in sequence.
-        """
-        i = 1
-        while i < MAX_VERB_COMBINATIONS:
-            verb_combinations = list(combinations(VERBS, i))
-            new = first.copy()
-            for verbs in verb_combinations:
-                for verb in verbs:
-                    new = verb.method(new, second)
-                rms = rmsdiff_2011(new, second)
-                if rms < .1:
-                    return verbs
-            i += 1
-        return None
-
-    @staticmethod
     def find_binary_verbs(first, second, expected):
-        """
-        :Note This is where we spend all our computation time... Optimize here.
-        Searches through in order list of all verbs that can be applied to figures to try and find some list of verbs
-        that creates the transformation. Verbs are arranged by cost. Verb combinations are roughly arranged by cost,
-        but actually done in lexicographic order, which is hopefully 'good enough'. Future improvement ideas: make this
-        a generator with Yield so that the Agent can spend time looking for more potential solutions, and if one of
-        those potential solutions turns out to be correct change the verb cost factors accordingly in order to 'learn'
-        which verbs are preferable to others.
-        :param first: the image we are transforming from
-        :param second: the image we are transforming to
-        :return: a list of verbs which when applied in order will change first to second.
-
-        :var MAX_VERB_COMBINATIONS This is the max depth the Agent will search for until giving up. 3 would mean 3 verbs
-        in sequence.
-        """
         i = 1
         for verb in binary_verbs:
             result = verb.method(first, second)
@@ -187,3 +169,36 @@ class Agent:
                 return verb
         i += 1
         return None
+
+    def get_blob_ids(self, blobs):
+        blob_ids = []
+        for blob in blobs:
+            if not self.blob_lib:
+                blob_ids.append(len(self.blob_lib))
+                self.blob_lib.append(blob)
+            else:
+                closest = min([(rmsdiff_2011(blob, blob_orig), blob_id) for blob_id, blob_orig in enumerate(self.blob_lib)])
+                if closest[0] < 20:
+                    blob_ids.append(closest[1])
+                else:
+                    blob_ids.append(len(self.blob_lib))
+                    self.blob_lib.append(blob)
+        return blob_ids
+
+    def check_set(self, set1, set2, partial_set3, problem):
+        """
+        unused strategy that can check if any two rows of 3 create a 'set' (including diagnols).
+        This strategy was obsoleted by the balancing matrix strategy.
+        """
+        a, b, c = set1
+        d, e, f = set2
+        g, h = partial_set3
+        ABC_blob_list = sorted(a + b + c)
+        DEF_blob_list = sorted(d + e + f)
+
+        if ABC_blob_list == DEF_blob_list:
+            for answer in problem.answers:
+                if sorted(answer.blobs + g + h) == ABC_blob_list:
+                    solution = answer.name
+                    return solution
+        return -1

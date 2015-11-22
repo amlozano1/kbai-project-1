@@ -1,1 +1,6 @@
+Basic Problems C
 Basic Problems D
+Basic Problems E
+Challenge Problems C
+Challenge Problems D
+Challenge Problems E
